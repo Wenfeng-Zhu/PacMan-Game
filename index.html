@@ -1,31 +1,35 @@
-<!DOCTYPE html>
 <html>
 	<head>
-		<meta charset="utf-8" />
-		<title>Pacman</title>
-		<style type="text/css">
-			@font-face {
-			font-family: 'BDCartoonShoutRegular';
-			  src: url('BD_Cartoon_Shout-webfont.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
+		<meta charset="utf8">
+		<title>PacMan</title>
+		<link rel="shortcut icon" href="favicon.png">
+		<style>
+			*{padding:0;margin:0;}
+			.wrapper{
+				width: 480px;
+				margin:10 auto;
+				line-height:36px;
+				text-align:center;
+				color:#999;
 			}
-			#pacman {
-			  height:640px;
-			  width: 480px;
-			  margin:20px auto;
+			canvas{display:block;background: #000;}
+			.mod-botton{
+				height: 32px;
+				padding: 15px;
+				text-align: center;
 			}
-			#shim { 
-			  font-family: BDCartoonShoutRegular; 
-			  position:absolute;
-			  visibility:hidden
-			}
-			h1 { font-family: BDCartoonShoutRegular; text-align:center; }
-			body { width: 480px; margin:20px auto; font-family:sans-serif; }
-			a { text-decoration:none; }
 		</style>
+		<script>
+			if(window.top != window.self ) {
+			    window.top.location = self.location.href;
+			}
+		</script>
 	</head>
 	<body>
-		
+		<div class="wrapper">
+			<canvas id="canvas" width="480" height="640" ></canvas>
+			<p>Press [Space] to pause or continue</p>
+		</div>
+		<script src="js/gamefunction.js"></script>
 	</body>
 </html>
