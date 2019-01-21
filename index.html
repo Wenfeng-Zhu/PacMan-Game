@@ -5,7 +5,7 @@
 		<style>
 			*{padding:0;margin:0;}
 			.wrapper{
-				width: 960px;
+				width: 480px;
 				margin:0 auto;
 				line-height:36px;
 				text-align:center;
@@ -25,6 +25,21 @@
 		</script>
 	</head>
 	<body>
+			<audio src="audio/die.mp3" id="die" controls="controls" loop="false" hidden="true">
+			</audio>
+
+			<audio src="audio/eatghost.mp3" id="eatghost" controls="controls" loop="false" hidden="true">
+			</audio>
+
+			<audio src="audio/eating.mp3" id="eating" controls="controls" loop="false" hidden="true">
+			</audio>
+
+			<audio src="audio/opening_song.mp3" id="opening_song" controls="controls" loop="false" hidden="true">
+			</audio>
+
+			<audio src="audio/eatpill.mp3" id="eatpill" controls="controls" loop="false" hidden="true">
+			</audio>
+
 		<div class="wrapper">
 			<canvas id="canvas" width="480" height="640" ></canvas>
 			<p>Press [Space] to pause or continue</p>

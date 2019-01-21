@@ -63,14 +63,14 @@ function Game(id, params) {
 		}
 		_events[eventType]['s' + this._stage.index + 'i' + this._id] = callback.bind(this); //绑定作用域
 	};
-	//地图对象构造器
+	//地图构造器
 	var Map = function (params) {
 		this._params = params || {};
 		this._id = 0; //标志符
 		this._stage = null; //与所属布景绑定
 		this._settings = {
-			x: 10, //地图起点坐标
-			y: 10,
+			x: 10,
+			y: 10, //地图起点坐标
 			size: 16, //地图单元的宽度
 			data: [], //地图数据
 			x_length: 0, //二维数组x轴长度
@@ -113,7 +113,139 @@ function Game(id, params) {
 			offset: Math.sqrt(fx * fx + fy * fy)
 		};
 	};
-	
+
+	//寻址算法
+	{
+		Map.prototype.searchRoad = function (start, end) {
+			var openList = [], //开启列表
+				closeList = [], //关闭列表
+				result = [], //结果数组
+				result_index; //结果数组在开启列表中的序号
+
+			openList.push({
+				x: start.x,
+				y: start.y,
+				G: 0
+			}); //把当前点加入到开启列表中，并且G是0
+
+			do {
+				var currentPoint = openList.pop();
+				closeList.push(currentPoint);
+				var surroundPoint = SurroundPoint(currentPoint);
+				for (var i in surroundPoint) {
+					var item = surroundPoint[i]; //获得周围的八个点
+					if (
+
+
+						this.get(item.x, item.y) != 1 && //判断是否是障碍物
+						!existList(item, closeList) && //判断是否在关闭列表中
+						this.get(item.x, currentPoint.y) != 1 &&
+						this.get(currentPoint.x, item.y) != 1) //判断之间是否有障碍物，如果有障碍物是过不去的=避免对角线移动
+					{
+						//g 到父节点的位置
+						//如果是上下左右位置的则g等于10，斜对角的就是14
+						var g = currentPoint.G + 10;
+						if (!existList(item, openList)) { //如果不在开启列表中
+							//计算H，通过水平和垂直距离进行确定
+							item['H'] = Math.abs(end.x - item.x) * 10 + Math.abs(end.y - item.y) * 10;
+							item['G'] = g;
+							item['F'] = item.H + item.G;
+							item['parent'] = currentPoint;
+							openList.push(item);
+						} else { //存在在开启列表中，比较目前的g值和之前的g的大小
+							var index = existList(item, openList);
+							//如果当前点的g更小
+							if (g < openList[index].G) {
+								openList[index].parent = currentPoint;
+								openList[index].G = g;
+								openList[index].F = g + openList[index].H;
+							}
+
+						}
+					}
+				}
+				//如果开启列表空了，没有通路，结果为空
+				if (openList.length == 0) {
+					break;
+				}
+				openList.sort(sortF); //这一步是为了循环回去的时候，找出 F 值最小的, 将它从 "开启列表" 中移掉
+			} while (!(result_index = existList({
+					x: end.x,
+					y: end.y
+				}, openList)));
+
+			//判断结果列表是否为空
+			if (!result_index) {
+				result = [];
+			} else {
+				var currentObj = openList[result_index];
+				do {
+					//把路劲节点添加到result当中
+					result.unshift({
+						x: currentObj.x,
+						y: currentObj.y
+					});
+					currentObj = currentObj.parent;
+				} while (currentObj.x != start.x || currentObj.y != start.y);
+
+			}
+			return result;
+
+		}
+		//用F值对数组排序
+		function sortF(a, b) {
+			return b.F - a.F;
+		}
+		//获取周围八个点的值
+		function SurroundPoint(curPoint) {
+			var x = curPoint.x,
+				y = curPoint.y;
+			return [{
+					x: x - 1,
+					y: y - 1
+				},
+				{
+					x: x,
+					y: y - 1
+				},
+				{
+					x: x + 1,
+					y: y - 1
+				},
+				{
+					x: x + 1,
+					y: y
+				},
+				{
+					x: x + 1,
+					y: y + 1
+				},
+				{
+					x: x,
+					y: y + 1
+				},
+				{
+					x: x - 1,
+					y: y + 1
+				},
+				{
+					x: x - 1,
+					y: y
+				}
+			]
+		}
+		//判断点是否存在在列表中，是的话返回的是序列号
+		function existList(point, list) {
+
+			for (var i = 0; i < list.length; i++) {
+				if (point.x == list[i].x && point.y == list[i].y) {
+					return i;
+				}
+			}
+
+			return false;
+		}
+	}
 	//布景对象构造器
 	var Stage = function (params) {
 		this._params = params || {};
@@ -167,12 +299,7 @@ function Game(id, params) {
 	//添加地图
 	Stage.prototype.createMap = function (options) {
 		var map = new Map(options);
-		//动态属性
-		map.data = JSON.parse(JSON.stringify(map._params.data));
-		map.y_length = map.data.length;
-		map.x_length = map.data[0].length;
-		map.imageData = null;
-		//关系绑定
+		//添加至地图队列
 		map._stage = this;
 		map._id = this.maps.length;
 		this.maps.push(map);
@@ -224,7 +351,7 @@ function Game(id, params) {
 			if (stage.update() != false) { //update返回false,则不绘制
 				stage.maps.forEach(function (map) {
 					if (!(f % map.frames)) {
-						map.times = f / map.frames; //计数器
+						map.times = f / map.frames; //计数器,由于stage的刷新频率等于item的刷新频率
 					}
 					if (map.cache) {
 						if (!map.imageData) {
@@ -296,13 +423,13 @@ function Game(id, params) {
 	this.getStages = function () {
 		return _stages;
 	};
-	//初始化引擎
+	//初始化
 	this.init = function () {
 		_index = 0;
 		this.start();
 	};
 }
-
+//游戏主程序
 (function () {
 	var _COIGIG = [{
 		'map': [
@@ -311,14 +438,14 @@ function Game(id, params) {
 			[1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1],
 			[1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1],
 			[1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-			[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+			[1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1],
 			[1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1],
 			[1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1],
 			[1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1],
 			[1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1],
 			[1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1],
 			[1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1],
-			[1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 2, 2, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1],
+			[1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 2, 2, 2, 2, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1],
 			[1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 2, 2, 2, 2, 2, 2, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1],
 			[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 2, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			[1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 2, 2, 2, 2, 2, 2, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1],
@@ -329,7 +456,7 @@ function Game(id, params) {
 			[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
 			[1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1],
 			[1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1],
-			[1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1],
+			[1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 1],
 			[1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1],
 			[1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1],
 			[1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1],
@@ -341,52 +468,65 @@ function Game(id, params) {
 
 
 		],
-		'wall_color': '#09f',
+		'wall_color': '#4169E1',
 		'powerpellets': { //能量豆
 			'1,3': 1,
-			'26,3': 1,
+			'24,3': 1,
 			'1,23': 1,
 			'24,23': 1
 		}
 	}];
-	_COLOR = ['#F00', '#F93', '#0CF', '#F9C'], //NPC颜色
+	_COLOR = ['#00FFFF', '#FFA500', '#FF0000', '#FFC0CB'], //NPC颜色
 		_LR = [1, 0, -1, 0],
 		_UD = [0, 1, 0, -1],
 		_LIFE = 4, //玩家生命值
 		_SCORE = 0; //玩家得分
 
 	var game = new Game('canvas');
-	//游戏主程序
+	//Start Page
+
 	(function () {
-		//Start Page
-		(function () {
-			var stage = game.createStage();
-			//Name of the game
-			stage.createItem({
-				x: game.width / 2,
-				y: game.height * .4,
-				draw: function (context) {
-					context.font = 'bold 42px Helvetica';
-					context.textAlign = 'center';
-					context.textBaseline = 'middle';
-					context.fillStyle = '#FFF';
-					context.fillText('Game Pacman', this.x, this.y);
-				}
-			});
-			//事件绑定
-			stage.bind('keydown', function (e) {
-				switch (e.keyCode) {
-					case 13:  //Enter
-					case 32:  //Space
+		var stage = game.createStage();
+
+		//Name of the game
+		stage.createItem({
+			x: game.width / 2,
+			y: game.height * .4,
+
+			draw: function (context) {
+				context.font = 'bold 42px Arial';
+				context.textAlign = 'center';
+				context.textBaseline = 'middle';
+				context.fillStyle = '#FFF';
+				context.fillText('Game Pacman', this.x, this.y);
+			}
+		});
+
+		var audioStart = document.getElementById('opening_song');
+		audioStart.play();
+
+
+
+		//事件绑定:切换至下一个场景，并暂停音效
+		stage.bind('keydown', function (e) {
+			switch (e.keyCode) {
+				case 13: //Enter
+				case 32: //Space
+					{
+						audioStart.pause();
 						game.nextStage();
-						break;
-				}
-			});
-		})();
-		//GamePart
+					}
+					break;
+			}
+		});
+	})();
+
+	//GamePart
+	(function () {
 		_COIGIG.forEach(function (config, index) {
-			var stage, map, beans, items, player, times;
+			var stage, map, dots, items, player, times;
 			stage = game.createStage({
+
 				update: function () {
 					var stage = this;
 					if (stage.status == 1) { //场景正常运行
@@ -397,6 +537,9 @@ function Game(id, params) {
 								if (dx * dx + dy * dy < 750 && item.status != 4) { //物体检测
 									if (item.status == 3) {
 										item.status = 4;
+										var audioEatGhost = document.getElementById('eatghost'); //当鬼魂被吃掉时播放音效
+										audioEatGhost.loop = false;
+										audioEatGhost.play();
 										_SCORE += 10;
 									} else {
 										stage.status = 3;
@@ -419,21 +562,18 @@ function Game(id, params) {
 					}
 				}
 			});
-			//logo
-			
 
 			//绘制地图
 			map = stage.createMap({
 				x: 30,
 				y: 10,
 				data: config['map'],
-				cache: true,
 				draw: function (context) {
 					context.lineWidth = 3;
 					for (var j = 0; j < this.y_length; j++) {
 						for (var i = 0; i < this.x_length; i++) {
 							var value = this.get(i, j);
-							//地图采用0，1绘制，只需要绘制出1所代表的墙体部分
+							//地图采用0，1绘制，只需要绘制出1所代表的墙体的外围部分
 							if (value) {
 								var code = [0, 0, 0, 0];
 								if (this.get(i + 1, j) && !(this.get(i + 1, j - 1) && this.get(i + 1, j + 1) && this.get(i, j - 1) && this.get(i, j + 1))) {
@@ -450,7 +590,7 @@ function Game(id, params) {
 								}
 								//判断code中是否有1，是否出现过上述情况
 								if (code.indexOf(1) > -1) {
-									context.strokeStyle = value == 2 ? "#FFF" : config['wall_color'];
+									context.strokeStyle = value == 2 ? '#FFFFFF' : config['wall_color'];
 									var pos = this.coordToPosition(i, j);
 									switch (code.join('')) {
 										case '1100':
@@ -495,21 +635,22 @@ function Game(id, params) {
 					}
 				}
 			});
-			//物品地图
-			beans = stage.createMap({
+			//DotsMap
+			dots = stage.createMap({
 				x: 30,
 				y: 10,
 				data: config['map'],
 				frames: 8,
+				//绘制可走路径上的普通豆和能量豆
 				draw: function (context) {
 					for (var j = 0; j < this.y_length; j++) {
 						for (var i = 0; i < this.x_length; i++) {
 							if (!this.get(i, j)) {
 								var pos = this.coordToPosition(i, j);
-								context.fillStyle = "#F5F5DC";
+								context.fillStyle = "#FFF8DC";
 								if (config['powerpellets'][i + ',' + j]) {
 									context.beginPath();
-									context.arc(pos.x, pos.y, 3 + this.times % 2, 0, 2 * Math.PI, true);
+									context.arc(pos.x, pos.y, 5 + this.times % 2, 0, 2 * Math.PI, true);
 									context.fill();
 									context.closePath();
 								} else {
@@ -520,9 +661,209 @@ function Game(id, params) {
 					}
 				}
 			});
+			//Score
+			stage.createItem({
+				x: 60,
+				y: 550,
+				draw: function (context) {
+					context.font = 'bold 26px Arial';
+					context.textAlign = 'left';
+					context.textBaseline = 'bottom';
+					context.fillStyle = '#FFF';
+					context.fillText('SCORE', this.x, this.y);
+					context.font = '28px Arial';
+					context.textAlign = 'left';
+					context.textBaseline = 'top';
+					context.fillStyle = '#FFF';
+					context.fillText(_SCORE, this.x + 40, this.y);
+
+				}
+			});
+			//pause
+			stage.createItem({
+				x: 180,
+				y: 250,
+				frames: 25,
+				draw: function (context) {
+					if (stage.status == 2 && this.times % 2) {
+						context.font = '40px Arial';
+						context.textAlign = 'left';
+						context.textBaseline = 'center';
+						context.fillStyle = '#98FB98';
+						context.fillText('PAUSE', this.x, this.y);
+					}
+				}
+			});
+			//HP
+			stage.createItem({
+				x: 320,
+				y: 540,
+				width: 30,
+				height: 30,
+				draw: function (context) {
+					var max = Math.min(_LIFE - 1, 5);
+					for (var i = 0; i < max; i++) {
+						var x = this.x + 40 * i,
+							y = this.y;
+						context.fillStyle = '#FFFF00';
+						context.beginPath();
+						context.arc(x, y, this.width / 2, .15 * Math.PI, -.15 * Math.PI, false);
+						context.lineTo(x, y);
+						context.closePath();
+						context.fill();
+					}
+				}
+			});
+			//Ghost
+			for (var i = 0; i < 4; i++) {
+				stage.createItem({
+					width: 16,
+					height: 16,
+					orientation: 3,
+					color: _COLOR[i],
+					location: map,
+					coord: {
+						x: 11 + i,
+						y: 14
+					},
+					vector: {
+						x: 11 + i,
+						y: 14
+					},
+					type: 2,
+					frames: 10,
+					speed: 1,
+					timeout: Math.floor(Math.random() * 400),
+
+					update: function () {
+						var startPoint = {
+							x: 12,
+							y: 15
+						};
+
+
+						if (this.status == 3 && !this.timeout) {
+							this.status = 1;
+						}
+						if (!this.coord.offset) { //到达坐标中心时计算
+							if (this.status == 1) {
+								if (!this.timeout) { //定时器
+									this.map = JSON.parse(JSON.stringify(map.data).replace(/2/g, 0));
+
+
+									this.path = map.searchRoad(
+										this.coord,
+										player.coord
+									);
+									if (this.path.length) {
+										this.vector = this.path[0];
+									}
+								}
+							} else if (this.status == 3) {
+								this.map = JSON.parse(JSON.stringify(map.data).replace(/2/g, 0));
+								this.path = map.searchRoad(
+									this.coord,
+									player.coord
+								);
+								if (this.path.length) {
+									this.vector = this.path[0];
+								}
+							} else if (this.status == 4) {
+								this.map = JSON.parse(JSON.stringify(map.data).replace(/2/g, 0));
+								this.path = map.searchRoad(
+									this.coord,
+									this._params.coord
+								);
+								if (this.path.length != 1) {
+									this.vector = this.path[0];
+								} else {
+									this.status = 1;
+
+
+								}
+							}
+							//是否转变方向
+							if (this.vector.change) {
+								this.coord.x = this.vector.x;
+								this.coord.y = this.vector.y;
+								var pos = map.coordToPosition(this.coord.x, this.coord.y);
+								this.x = pos.x;
+								this.y = pos.y;
+							}
+							//方向判定
+							if (this.vector.x > this.coord.x) {
+								this.orientation = 0;
+							} else if (this.vector.x < this.coord.x) {
+								this.orientation = 2;
+							} else if (this.vector.y > this.coord.y) {
+								this.orientation = 1;
+							} else if (this.vector.y < this.coord.y) {
+								this.orientation = 3;
+							}
+						}
+						this.x += this.speed * _LR[this.orientation];
+						this.y += this.speed * _UD[this.orientation];
+					},
+
+
+
+					draw: function (context) {
+
+						var isSick = false;
+						if (this.status == 3) {
+							isSick = this.timeout > 80 || this.times % 2 ? true : false;
+						}
+
+						if (this.status != 4) {
+							context.fillStyle = (isSick ? '#BABABA' : this.color);
+
+							context.beginPath();
+							context.arc(this.x, this.y, this.width * .5, 0, Math.PI, true);
+							switch (this.times % 2) {
+								case 0:
+									context.lineTo(this.x - this.width * .5, this.y + this.height * .4);
+									context.quadraticCurveTo(this.x - this.width * .4, this.y + this.height * .5, this.x - this.width * .2, this.y + this.height * .3);
+									context.quadraticCurveTo(this.x, this.y + this.height * .5, this.x + this.width * .2, this.y + this.height * .3);
+									context.quadraticCurveTo(this.x + this.width * .4, this.y + this.height * .5, this.x + this.width * .5, this.y + this.height * .4);
+									break;
+								case 1:
+									context.lineTo(this.x - this.width * .5, this.y + this.height * .3);
+									context.quadraticCurveTo(this.x - this.width * .25, this.y + this.height * .5, this.x, this.y + this.height * .3);
+									context.quadraticCurveTo(this.x + this.width * .25, this.y + this.height * .5, this.x + this.width * .5, this.y + this.height * .3);
+									break;
+							}
+							context.fill();
+							context.closePath();
+						}
+
+						//眼睛
+						context.beginPath();
+						context.fillStyle = '#FFFFFF';
+						context.arc(this.x + this.width * .15, this.y - this.height * .21, this.width * .12, 0, 2 * Math.PI, false);
+						context.arc(this.x - this.width * .15, this.y - this.height * .21, this.width * .12, 0, 2 * Math.PI, false);
+						context.fill();
+						context.closePath();
+						context.beginPath();
+						context.fillStyle = '#000000';
+						context.arc(this.x + this.width * .15, this.y - this.height * .21, this.width * .05, 0, 2 * Math.PI, false);
+						context.arc(this.x - this.width * .15, this.y - this.height * .21, this.width * .05, 0, 2 * Math.PI, false);
+						context.fill();
+						context.closePath();
+
+
+
+					}
+				});
+
+			}
+
+
 			items = stage.getItemsByType(2);
+
 			//主角
 			player = stage.createItem({
+				audioStatus: 0,
+
 				width: 20,
 				height: 20,
 				type: 1,
@@ -543,26 +884,32 @@ function Game(id, params) {
 							}
 						}
 						this.control = {};
-
 						var value = map.get(coord.x + _LR[this.orientation], coord.y + _UD[this.orientation]);
 						//前进方向上是否可走，speed根据是否可走保持或归零
 						if (value == 0) {
 							this.x += this.speed * _LR[this.orientation];
 							this.y += this.speed * _UD[this.orientation];
-						} else if (value < 0) {//地图中的左右穿越部分
+						} else if (value < 0) { //地图中的左右穿越部分
 							this.x -= map.size * (map.x_length - 1) * _LR[this.orientation];
 							this.y -= map.size * (map.y_length - 1) * _UD[this.orientation];
 						}
 					} else {
-						if (!beans.get(this.coord.x, this.coord.y)) { //吃豆
+						if (!dots.get(this.coord.x, this.coord.y)) { //吃豆
+
+							var audioEatpill = document.getElementById('eatpill');
+							audioEatpill.loop = false; //eatingpill音效仅播放一次
+
 							_SCORE++;
-							beans.set(this.coord.x, this.coord.y, 1);
+							dots.set(this.coord.x, this.coord.y, 1);
 							if (config['powerpellets'][this.coord.x + ',' + this.coord.y]) { //吃到能量豆
+								audioEatpill.play(); //吃到能量豆时播放eatpill音效
 								items.forEach(function (item) {
 									if (item.status == 1 || item.status == 3) { //如果NPC为正常状态，则置为临时状态
 										item.timeout = 450;
 										item.status = 3;
+
 									}
+
 								});
 							}
 						}
@@ -571,13 +918,20 @@ function Game(id, params) {
 					}
 				},
 				draw: function (context) {
-					context.fillStyle = '#FFE600';
+					context.fillStyle = '#FFFF00';
 					context.beginPath();
 					if (stage.status != 3) { //玩家正常状态
 						if (this.times % 2) {
 							context.arc(this.x, this.y, this.width / 2, (.5 * this.orientation + .20) * Math.PI, (.5 * this.orientation - .20) * Math.PI, false);
 						} else {
 							context.arc(this.x, this.y, this.width / 2, (.5 * this.orientation + .01) * Math.PI, (.5 * this.orientation - .01) * Math.PI, false);
+						}
+					} else { //玩家被吃
+						var audioDie = document.getElementById('die');
+						audioDie.loop = false;
+						audioDie.play(); //玩家被吃时播放die音效，且只播放一次
+						if (stage.timeout) {
+							context.arc(this.x, this.y, this.width / 2, (.5 * this.orientation + 1 - .02 * stage.timeout) * Math.PI, (.5 * this.orientation - 1 + .02 * stage.timeout) * Math.PI, false);
 						}
 					}
 					context.lineTo(this.x, this.y);
@@ -625,7 +979,7 @@ function Game(id, params) {
 			y: game.height * .35,
 			draw: function (context) {
 				context.fillStyle = '#FFF';
-				context.font = 'bold 48px Helvetica';
+				context.font = 'bold 48px Arial';
 				context.textAlign = 'center';
 				context.textBaseline = 'middle';
 				context.fillText(_LIFE ? 'YOU WIN!' : 'GAME OVER', this.x, this.y);
@@ -637,7 +991,7 @@ function Game(id, params) {
 			y: game.height * .5,
 			draw: function (context) {
 				context.fillStyle = '#FFF';
-				context.font = '20px Helvetica';
+				context.font = '20px Arial';
 				context.textAlign = 'center';
 				context.textBaseline = 'middle';
 				context.fillText('FINAL SCORE: ' + (_SCORE + 50 * Math.max(_LIFE - 1, 0)), this.x, this.y);
@@ -649,7 +1003,7 @@ function Game(id, params) {
 				case 13: //回车
 				case 32: //空格
 					_SCORE = 0;
-					_LIFE = 5;
+					_LIFE = 3;
 					game.setStage(1);
 					break;
 			}

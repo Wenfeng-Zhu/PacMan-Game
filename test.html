@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Page Title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" media="screen" href="main.css" />
+    <script>
+        function autoPlay() {
+            var myAuto = document.getElementById('die');
+            myAuto.play();
+        }
+        function closePlay() {
+            var myAuto = document.getElementById('die');
+            myAuto.pause();
+            myAuto.load();
+        }
+        
+    </script>
+</head>
+
+<body>
+    <audio src="audio/die.mp3" id="die" controls="controls" loop="false" hidden="true">
+
+    </audio>
+    <input type="button" onclick="autoPlay()" value="播放" />
+    <input type="button" onclick="closePlay()" value="关闭" />
+
+
+</body>
+
+</html>
